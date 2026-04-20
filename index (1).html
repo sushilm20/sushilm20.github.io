@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcard Pro - Fixed SRS</title>
+    <style>
+        :root {
+            --primary: #4a90e2; --success: #2ecc71; --danger: #e74c3c; --bg: #f0f2f5;
+            --front-bg: #ffffff; --front-text: #2c3e50; --back-bg: #2c3e50;
+            --back-text: #ecf0f1; --back-accent: #5dade2; --dark: #2c3e50;
+        }
+
+        body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: var(--bg); margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 500px; text-align: center; }
+
+        .info-box { background: var(--dark); color: white; padding: 8px 15px; border-radius: 20px; display: inline-block; font-size: 0.75rem; font-weight: bold; margin-bottom: 15px; }
+
+        .settings-bar { background: #fff; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 0.8rem; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: left; }
+        .setting-item { display: flex; flex-direction: column; gap: 5px; }
+        input[type="number"] { padding: 8px; border: 1px solid #ddd; border-radius: 6px; background: white; width: 100%; box-sizing: border-box; }
+
+        .timer-container { width: 100%; height: 6px; background: #ddd; border-radius: 3px; margin-bottom: 15px; overflow: hidden; display: none; }
+        #timerBar { height: 100%; width: 100%; background: var(--primary); transition: width 1s linear; }
+
+        .mode-toggle { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+        button { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .mode-btn { background: #d1d8e0; color: #4b6584; flex: 1; }
+        .mode-btn.active { background: var(--primary); color: white; }
+
+        .stats { margin-bottom: 10px; color: #718093; font-size: 0.9rem; font-weight: bold; min-height: 1.2em; }
+
+        .flashcard-wrapper { height: 260px; perspective: 1000px; margin-bottom: 25px; position: relative; }
+        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d; cursor: pointer; }
+        .card-inner.is-flipped { transform: rotateY(180deg); }
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 20px; padding: 30px; box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .card-front { background: var(--front-bg); color: var(--front-text); border-top: 6px solid var(--primary); }
+        .card-back { background: var(--back-bg); color: var(--back-text); transform: rotateY(180deg); border: 2px solid var(--back-accent); }
+        
+        .label { position: absolute; top: 15px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; }
+        .difficulty-tag { position: absolute; bottom: 15px; font-size: 0.65rem; color: #999; }
+
+        #pauseOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.9); border-radius: 20px; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; color: var(--primary); font-weight: bold; font-size: 1.5rem; }
+
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+        .option-btn { background: white; border: 2px solid #ddd; padding: 14px; border-radius: 12px; font-size: 0.85rem; }
+        .option-btn.correct { background: var(--success) !important; color: white; border-color: var(--success); }
+        .option-btn.wrong { background: var(--danger) !important; color: white; border-color: var(--danger); }
+        
+        .hidden { display: none !important; }
+        .control-row { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
+        .pause-btn { background: #f39c12; color: white; min-width: 100px; }
+        .nav-btn { background: #2c3e50; color: white; width: 120px; }
+
+        .leaderboard { margin-top: 30px; padding: 15px; background: rgba(255,255,255,0.7); border-radius: 15px; border: 1px dashed #ccc; }
+        .score-item { padding: 5px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="deckInfo" class="info-box">Total Cards: 0</div>
+
+    <div class="mode-toggle">
+        <button id="playModeBtn" class="mode-btn active">Play Mode</button>
+        <button id="quizModeBtn" class="mode-btn">SRS Quiz</button>
+    </div>
+
+    <div class="settings-bar">
+        <div class="setting-item"><label>Questions per Quiz:</label><input type="number" id="countInput" value="10" min="1"></div>
+        <div class="setting-item"><label>Timer (sec):</label><input type="number" id="timerInput" value="10" min="3"></div>
+        <div class="setting-item" style="flex-direction:row; align-items:center; justify-content:space-between; padding-top:15px; grid-column: span 2;">
+            <label>🔊 Sound Effects</label><input type="checkbox" id="soundToggle" checked style="width:auto">
+        </div>
+    </div>
+
+    <div class="timer-container" id="timerContainer"><div id="timerBar"></div></div>
+    <div id="stats" class="stats">Ready</div>
+
+    <div class="flashcard-wrapper">
+        <div id="pauseOverlay">PAUSED</div>
+        <div class="card-inner" id="cardElement" onclick="handleFlip()">
+            <div class="card-front">
+                <span class="label" style="color:var(--primary)">Terminology</span>
+                <div id="frontText"></div>
+                <div id="weightTag" class="difficulty-tag"></div>
+            </div>
+            <div class="card-back">
+                <span class="label" style="color:var(--back-accent)">Definition</span>
+                <div id="backText"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="playUI" class="control-row"><button id="prevBtn" class="nav-btn">Prev</button><button id="nextBtn" class="nav-btn">Next</button></div>
+    <div id="quizUI" class="hidden"><button id="pauseBtn" class="pause-btn">Pause</button><div class="options-grid" id="optionsGrid"></div></div>
+
+    <div class="leaderboard"><h3>🏆 Top Scores</h3><div id="scoreList"></div></div>
+</div>
+
+<script>
+    // --- IMPORTANT: MAKE SURE EVERY CARD HAS A UNIQUE ID ---
+    const masterDeck = [
+        { q: "Internet Engineering Task Force (IETF)", a: "develops and oversees Internet standards and Internet protocols", id: "c1"},
+        { q: "The Internet", a: " A collection of networks or network of networks, hierarchical, redundant; A connection of devices connected to each other via hardware, including routers, servers, and other devices, each of which is given an IP Address and must follow protocols", id: "c2"},
+        { q: "Computing Device", a: "a machine that can run a program, including computers, tablets, servers, routers, and smart sensors", id: "c3"},
+        { q: "Computing System", a: "a group of computing devices and programs working together for a common purpose", id: "c4"},
+        { q: "Computing Network", a: "a group of interconnected computing devices capable of sending or receiving data. ", id: "c5"},
+        { q: "Path", a: "the series of connections between computing devices on a network starting with a sender and ending with a receiver.", id: "c6"},
+        { q: "Bandwidth", a: "the maximum amount of data that can be sent in a fixed amount of time, usually measured in bits per second. ", id: "c7"},
+        { q: "Protocol", a: "An agreed-upon set of rules that specify the behavior of some system", id: "c8"},
+	{ q: "IP Address", a: "The unique number assigned to each device on the Internet.", id: "c9"},
+	{ q: "IPv4", a: "Old IP address system, 2<sup>32</sup> addresses (about 4 billion)", id: "c10"},
+	{ q: "IPv6", a: "New IP address system, will provide 2<sup>128</sup> (about an undecillion) addresses", id: "c11"},
+	{ q: "Internet Protocol (IP)", a: "a protocol for sending data across the Internet that assigns unique numbers (IP addresses) to each connected device", id: "c132", id: "c12"},
+	{ q: "Router", a: "A type of computer that forwards data across a network", id: "c13"},
+	{ q: "Redundancy", a: "the inclusion of extra components so that a system can continue to work even if individual components fail, for example by  having more than one path between any two connected devices in a network.", id: "c14"},
+	{ q: "Network Redundancy", a: "having multiple backups to ensure reliability during cases of high usage or failure", id: "c15"},
+	{ q: "Fault Tolerant", a: "Can continue to function even in the event of individual component failures. This is important because elements of complex systems like a computer network fail at unexpected times, often in groups.", id: "c16"},
+	{ q: "Datastream", a: "Information passed through the internet in packets.", id: "c17"},
+	{ q: "Packet", a: "A chunk of data sent over a network. Larger messages are divided into packets that may arrive at the destination in order, out-of-order, or not at all.", id: "c18"},
+	{ q: "Packet Metadata", a: "Data added to packets to help route them through the network and reassemble the original message.", id: "c19"},
+	{ q: "Transmission Control Protocol (TCP)", a: "A protocol for sending packets that does error-checking to ensure all packets are received and properly ordered", id: "c20"},
+	{ q: "User Datagram Protocol (UDP)", a: "A protocol for sending packets quickly with minimal error-checking and no resending of dropped packets", id: "c21"},
+	{ q: "Scalability", a: "the capacity for the system to change in size and scale to meet new demands", id: "c22"},
+	{ q: "The Domain Name System (DNS)", a: "the system of servers responsible for translating domain names like example.com into IP addresses", id: "c23"},
+	{ q: "World Wide Web", a: "a system of linked pages, programs, and files; the set of interconnected documents identified by the hyperlinks and Uniform Resource Locators (URLs) or information space of the Internet", id: "c24"},
+	{ q: "Hypertext Transfer Protocol (HTTP) or (HTTPS)", a: "a protocol for computers to request and share the pages that make up the world wide web on the Internet; s at the end of HTTPS stands for safe", id: "c25"},
+	{ q: "Server", a: " a device that manages access and responds to requests on a network", id: "c26"},
+	{ q: "routing (of packets)", a: "way in which data is sent on a network", id: "c27"},
+{ q: "Open Standards", a: "standards made available to the general public, non-proprietary protocols or specifications", id: "c28"},
+	{ q: "Net Neutrality", a: "The principle that Internet service providers should enable access to all content and applications regardless of the source, and without favoring or blocking particular products or websites", id: "c29"},
+	{ q: "Latency", a: "How much time it takes for a packet to get from one point to another point", id: "c30"},
+	{ q: "System Latency", a: "time elapsed between the transmission of request and receipt of a reply; round trip time", id: "c31"},
+	{ q: "ISP", a: "Internet Service Provider", id: "c32"},
+	{ q: "hierarchical system", a: "system where devices and protocols are in an interdependent relationship and ordered into several levels; every member of this system has some other member above it and another member below it with the exception of the top level", id: "c33"},
+	{ q: "domain name syntax", a: "hierarchical definition of what a domain should look like; for example: www.realworld.com", id: "c34"},
+	{ q: "primary domain, secondary domain, ...", a: "Example: primary domain: www.realworld.com; secondary domain: www.realword.com/help", id: "c35"},
+	{ q: "Browsers", a: "oftware for presenting Web content (Chrome, Internet Explorer, etc", id: "c36"}
+        // When adding your 36 cards, ensure id: "c9", "c10", etc.
+    ];
+
+    let deck = [];
+    let index = 0, score = 0, isQuiz = false, canAnswer = true, isPaused = false;
+    let timerInterval, timeLeft, totalTime;
+    let cardWeights = JSON.parse(localStorage.getItem('flashcardWeights')) || {};
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq, type, duration, vol = 0.1) {
+        if (!document.getElementById('soundToggle').checked) return;
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
+    }
+    const sounds = {
+        correct: () => { playTone(523, 'sine', 0.4); setTimeout(() => playTone(659, 'sine', 0.4), 80); },
+        wrong: () => playTone(220, 'sawtooth', 0.3, 0.05),
+        tick: () => playTone(880, 'sine', 0.03, 0.02),
+        flip: () => playTone(400, 'sine', 0.05, 0.01)
+    };
+
+    const card = document.getElementById('cardElement'), optionsGrid = document.getElementById('optionsGrid');
+    const timerBar = document.getElementById('timerBar'), timerContainer = document.getElementById('timerContainer');
+    const countInput = document.getElementById('countInput'), pauseOverlay = document.getElementById('pauseOverlay'), pauseBtn = document.getElementById('pauseBtn');
+
+    function reset() {
+        clearInterval(timerInterval);
+        isPaused = false; pauseOverlay.style.display = 'none';
+        pauseBtn.textContent = 'Pause'; pauseBtn.style.background = '#f39c12';
+        index = 0; score = 0;
+        
+        document.getElementById('deckInfo').innerHTML = `TOTAL CARDS: <b>${masterDeck.length}</b>`;
+        
+        const requested = parseInt(countInput.value) || 5;
+        const limit = Math.min(masterDeck.length, requested);
+        countInput.value = limit;
+
+        if (isQuiz) {
+            deck = generateWeightedDeck(limit);
+        } else {
+            deck = [...masterDeck].sort(() => Math.random() - 0.5);
+        }
+        
+        updateUI();
+        updateLeaderboardDisplay();
+    }
+
+    function generateWeightedDeck(limit) {
+        let pool = [...masterDeck];
+        let weightedSelection = [];
+
+        // 1. Build weighted lottery
+        pool.forEach(item => {
+            const w = cardWeights[item.id] || 1;
+            for (let i = 0; i < w; i++) weightedSelection.push(item);
+        });
+
+        let final = [];
+        // 2. Pick unique items from weighted pool
+        while (final.length < limit && weightedSelection.length > 0) {
+            let rIndex = Math.floor(Math.random() * weightedSelection.length);
+            let pick = weightedSelection[rIndex];
+            
+            if (!final.some(c => c.id === pick.id)) {
+                final.push(pick);
+            }
+            // Remove ALL instances of this ID to keep it unique
+            weightedSelection = weightedSelection.filter(c => c.id !== pick.id);
+        }
+
+        // 3. HARD FALLBACK: If we still don't have enough (due to ID errors), just fill it.
+        if (final.length < limit) {
+            let remaining = pool.filter(c => !final.some(f => f.id === c.id));
+            remaining.sort(() => Math.random() - 0.5);
+            while (final.length < limit && remaining.length > 0) {
+                final.push(remaining.pop());
+            }
+        }
+        return final;
+    }
+
+    function updateUI() {
+        if (!deck[index]) return;
+        card.classList.remove('is-flipped');
+        const active = deck[index];
+        const w = cardWeights[active.id] || 1;
+        
+        setTimeout(() => {
+            document.getElementById('frontText').innerHTML = active.q;
+            document.getElementById('backText').innerHTML = active.a;
+            document.getElementById('weightTag').textContent = `Mastery: ${11 - w}/10`;
+        }, 150);
+
+        document.getElementById('stats').textContent = isQuiz ? `QUIZ • Q${index + 1}/${deck.length}` : `PLAY • ${index + 1}/${deck.length}`;
+        if (isQuiz) generateOptions(active.a);
+    }
+
+    function generateOptions(correct) {
+        optionsGrid.innerHTML = ''; canAnswer = true;
+        let pool = masterDeck.filter(item => item.a !== correct).map(item => item.a);
+        pool.sort(() => Math.random() - 0.5);
+        let choices = [correct, ...pool.slice(0, 3)].sort(() => Math.random() - 0.5);
+        
+        choices.forEach(c => {
+            const b = document.createElement('button');
+            b.className = 'option-btn'; b.innerHTML = c;
+            b.onclick = (e) => { e.stopPropagation(); checkAnswer(c, correct, b); };
+            optionsGrid.appendChild(b);
+        });
+        startTimer();
+    }
+
+    function startTimer() {
+        totalTime = parseInt(document.getElementById('timerInput').value) || 10;
+        timeLeft = totalTime;
+        resumeTimer();
+    }
+
+    function resumeTimer() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            if (timeLeft <= 3 && timeLeft > 0) sounds.tick();
+            timerBar.style.width = (timeLeft / totalTime) * 100 + '%';
+            if (timeLeft <= 3) timerBar.style.background = 'var(--danger)';
+            if (timeLeft <= 0) { clearInterval(timerInterval); handleNext(false); }
+        }, 1000);
+    }
+
+    function checkAnswer(sel, cor, btn) {
+        if (!canAnswer) return;
+        canAnswer = false; clearInterval(timerInterval);
+        const isCor = (sel === cor);
+        
+        let w = cardWeights[deck[index].id] || 1;
+        cardWeights[deck[index].id] = isCor ? Math.max(1, w - 1) : Math.min(10, w + 2);
+        localStorage.setItem('flashcardWeights', JSON.stringify(cardWeights));
+
+        if (isCor) { btn.classList.add('correct'); score++; sounds.correct(); }
+        else { btn.classList.add('wrong'); sounds.wrong(); Array.from(optionsGrid.children).forEach(b => { if(b.innerHTML === cor) b.classList.add('correct'); }); }
+        
+        setTimeout(() => handleNext(true), 1500);
+    }
+
+    function handleNext(answered) {
+        if (!answered) sounds.wrong(); // Handle timeout sound
+        if (index < deck.length - 1) { index++; updateUI(); }
+        else { alert(`Quiz Finished! Score: ${score}/${deck.length}`); saveScore(score, deck.length); reset(); }
+    }
+
+    function saveScore(s, t) {
+        let scs = JSON.parse(localStorage.getItem('flashcardTop3')) || [];
+        scs.push({ val: s, total: t, date: new Date().toLocaleDateString() });
+        scs.sort((a, b) => b.val - a.val);
+        localStorage.setItem('flashcardTop3', JSON.stringify(scs.slice(0, 3)));
+        updateLeaderboardDisplay();
+    }
+
+    function updateLeaderboardDisplay() {
+        let scs = JSON.parse(localStorage.getItem('flashcardTop3')) || [];
+        document.getElementById('scoreList').innerHTML = scs.length ? scs.map((s, i) => `<div class="score-item"><span>#${i+1} Score: <b>${s.val}/${s.total}</b></span><span>${s.date}</span></div>`).join('') : '<div style="font-size:0.8rem; padding:10px; color:#999">No scores yet</div>';
+    }
+
+    function togglePause() {
+        if (!isQuiz) return;
+        isPaused = !isPaused;
+        if (isPaused) { clearInterval(timerInterval); pauseOverlay.style.display = 'flex'; pauseBtn.textContent = 'Resume'; canAnswer = false; }
+        else { resumeTimer(); pauseOverlay.style.display = 'none'; pauseBtn.textContent = 'Pause'; canAnswer = true; }
+    }
+
+    function handleFlip() { if (!isQuiz && !isPaused) { sounds.flip(); card.classList.toggle('is-flipped'); } }
+
+    pauseBtn.onclick = togglePause;
+    document.getElementById('playModeBtn').onclick = () => { isQuiz = false; timerContainer.style.display = 'none'; reset(); setUI('playModeBtn', 'playUI'); };
+    document.getElementById('quizModeBtn').onclick = () => { isQuiz = true; timerContainer.style.display = 'block'; reset(); setUI('quizModeBtn', 'quizUI'); };
+
+    function setUI(bid, uid) {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(bid).classList.add('active');
+        document.getElementById('playUI').classList.add('hidden');
+        document.getElementById('quizUI').classList.add('hidden');
+        document.getElementById(uid).classList.remove('hidden');
+    }
+
+    document.getElementById('nextBtn').onclick = () => { if(!isQuiz) { index = (index+1)%deck.length; updateUI(); }};
+    document.getElementById('prevBtn').onclick = () => { if(!isQuiz) { index = (index-1+deck.length)%deck.length; updateUI(); }};
+    countInput.onchange = reset;
+    
+    reset();
+</script>
+</body>
+</html>
